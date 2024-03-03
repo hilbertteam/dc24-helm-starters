@@ -1,0 +1,40 @@
+{{- range $name, $v := .Values.instances }}
+{{- if $v.enabled }}
+
+{{- $appConfig := dict }}
+{{- if $v.appConfig }}
+{{- $appConfig = mergeOverwrite (deepCopy $.Values.common.appConfig) (deepCopy $v.appConfig) }}
+{{- else }}
+{{- $appConfig = $.Values.common.appConfig }}
+{{- end }}
+
+{{- $config := mergeOverwrite (deepCopy $.Values.common) (deepCopy $v) }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ include "<CHARTNAME>.fullname" $ }}-{{ $name }}"
+  labels:
+    {{- include "<CHARTNAME>.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+  annotations:
+    {{- include "<CHARTNAME>.common.annotations" $ | nindent 4 }}
+data:
+  LOG_DIR: {{ $appConfig.log.dir | quote }}
+  LOG_FILENAME: {{ $appConfig.log.fileName | quote }}
+  LOG_LEVEL: {{ $appConfig.log.level | quote }}
+  LOG_FORMAT: {{ $appConfig.log.format | quote }}
+  LOG_FILES_COUNT: {{ $appConfig.log.filesCount | quote }}
+  LOG_FILE_SIZE: {{ $appConfig.log.fileSize | quote }}
+  STAGE: {{ $appConfig.stage | quote }}
+  KEYCLOAK_SERVER_URL: {{ $appConfig.keycloak.url | quote }}
+  KEYCLOAK_REALM_NAME: {{ $appConfig.keycloak.realm | quote }}
+  {{- with $.Values.globalExtraEnvVarsCM }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  {{- with $config.extraEnvVarsCM }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+...
+{{- end }}
+{{- end }}

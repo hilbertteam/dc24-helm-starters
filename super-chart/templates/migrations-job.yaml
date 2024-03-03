@@ -1,0 +1,51 @@
+{{- if .Values.migrations.enabled }}
+{{- $config := mergeOverwrite (deepCopy .Values.common) (deepCopy .Values.migrations) }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "<CHARTNAME>.fullname" . }}-migrations
+  labels:
+    {{- include "<CHARTNAME>.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+  annotations:
+    {{- include "<CHARTNAME>.migrations.annotations" . | nindent 4 }}
+spec:
+  backoffLimit: {{ $config.backoffLimit }}
+  activeDeadlineSeconds: {{ $config.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        {{- include "<CHARTNAME>.labels" . | nindent 8 }}
+        app.kubernetes.io/component: migrations
+    spec:
+      {{- if .Values.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.pullSecret }}
+      {{- end }}
+      securityContext:
+        {{- $config.podSecurityContext | toYaml | nindent 8 }}
+      restartPolicy: {{ $config.restartPolicy }}
+      containers:
+        - name: "{{ $config.appConfig.appName }}"
+          image: "{{ .Values.image.registry }}/{{ .Values.image.name }}:{{ .Values.image.tag }}"
+          {{- if $config.appConfig.appCommand }}
+          command:
+            {{- $config.appConfig.appCommand | toYaml | nindent 12 }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.pullPolicy | quote }}
+          resources:
+            {{- $config.resources | toYaml | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: "{{ include "<CHARTNAME>.fullname" . }}-migrations"
+            - secretRef:
+                name: "{{ include "<CHARTNAME>.fullname" . }}-migrations"
+          volumeMounts:
+            - name: logs
+              mountPath: {{ $config.appConfig.log.dir | quote }}
+      volumes:
+        - name: logs
+          emptyDir: {}
+...
+{{- end }}

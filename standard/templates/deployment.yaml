@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "<CHARTNAME>.fullname" . | quote }}
+  labels:
+    {{- include "<CHARTNAME>.main.labels" . | nindent 4 }}
+  annotations:
+    {{- include "<CHARTNAME>.main.annotations" . | nindent 4 }}
+    {{- include "<CHARTNAME>.checksumPodAnnotations" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "<CHARTNAME>.main.selectorLabels" . | nindent 6 }}
+  {{- if not .Values.main.autoscaling.enabled }}
+  replicas: {{ .Values.main.replicaCount }}
+  {{- end }}
+  strategy: {{- toYaml .Values.main.strategy | nindent 4 }}
+  template:
+    metadata:
+      labels:
+        {{- include "<CHARTNAME>.main.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- include "<CHARTNAME>.main.annotations" . | nindent 8 }}
+        {{- include "<CHARTNAME>.checksumPodAnnotations" . | nindent 8 }}
+    spec:
+      {{- if .Values.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.pullSecret }}
+      {{- end }}
+      containers:
+        - name: {{ include "<CHARTNAME>.fullname" . | quote }}
+          {{- with .Values.main.lifecycleHooks }}
+          lifecycle:
+          {{- tpl . $ | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.registry }}/{{ .Values.image.name }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.pullPolicy | quote }}
+          resources: {{- toYaml .Values.main.resources | nindent 12 }}
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: KUBE_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: KUBE_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          envFrom:
+            - configMapRef:
+                name: {{ include "<CHARTNAME>.fullname" . | quote }}
+            - secretRef:
+                name: {{ include "<CHARTNAME>.fullname" . | quote }}
+          ports:
+          {{- range .Values.main.service.ports }}
+            - name: {{ .name }}
+              containerPort: {{ .ports.internal }}
+              protocol: {{ .protocol }}
+          {{- end }}
+          volumeMounts:
+          {{- if .Values.appConfig.extraFiles }}
+            {{- range .Values.appConfig.extraFiles }}
+            - name: "{{ include "<CHARTNAME>.fullname" $ }}-{{ .path | replace "/" "-" | replace "." "-" | trimAll "-" }}"
+              mountPath: {{ .path | quote }}
+              {{- if .readOnly }}
+              readOnly: {{ .readOnly }}
+              {{- end }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.main.probes.enabled }}
+          {{- if .Values.main.probes.readiness }}
+          readinessProbe: {{- toYaml .Values.main.probes.readiness | nindent 12 }}
+          {{- end }}
+          {{- if .Values.main.probes.liveness }}
+          livenessProbe: {{- toYaml .Values.main.probes.liveness | nindent 12 }}
+          {{- end }}
+          {{- if .Values.main.probes.startup }}
+          startupProbe: {{- toYaml .Values.main.probes.startup | nindent 12 }}
+          {{- end }}
+          {{- end }}
+
+      volumes:
+      {{- if .Values.appConfig.extraFiles }}
+        {{- range .Values.appConfig.extraFiles }}
+        {{- $extraFiles := . }}
+        - name: "{{ include "<CHARTNAME>.fullname" $ }}-{{ .path | replace "/" "-" | replace "." "-" | trimAll "-" }}"
+          secret:
+            secretName: "{{ include "<CHARTNAME>.fullname" $ }}-extra-files-{{ .path | replace "/" "-" | replace "." "-" | trimAll "-" }}"
+            items:
+            {{- range .files }}
+              - key: "{{ .name }}"
+                path: "{{ .name }}"
+            {{- end }}
+        {{- end }}
+      {{- end }}
+
+      {{- if .Values.main.nodeSelector }}
+      nodeSelector: {{ toYaml .Values.main.nodeSelector | nindent 8 }}
+      {{- end }}
+
+      {{- if .Values.main.affinity }}
+      affinity: {{ toYaml .Values.main.affinity | nindent 8 }}
+      {{- else }}
+      affinity:
+        {{- if .Values.main.affinity }}
+        {{- toYaml .Values.main.affinity | nindent 8 }}
+        {{- else }}
+        {{- if eq .Values.main.podAntiAffinityPreset "soft" }}
+        {{- include "<CHARTNAME>.main.podAntiAffinity.soft" . | nindent 8 }}
+        {{- else if eq .Values.main.podAntiAffinityPreset "hard" }}
+        {{- include "<CHARTNAME>.main.podAntiAffinity.hard" . | nindent 8 }}
+        {{- end }}
+        {{- end }}
+      {{- end }}
+
+      {{- if .Values.main.tolerations }}
+      tolerations: {{ toYaml .Values.main.tolerations | nindent 8 }}
+      {{- end }}

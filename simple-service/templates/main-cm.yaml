@@ -1,0 +1,26 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "<CHARTNAME>.fullname" . | quote }}
+  labels:
+    {{- include "<CHARTNAME>.main.labels" . | nindent 4 }}
+  annotations:
+    {{- include "<CHARTNAME>.main.annotations" . | nindent 4 }}
+data:
+  KEYCLOAK_SERVER_URL: {{ .Values.appConfig.keycloak.url | quote }}
+  KEYCLOAK_REALM_NAME: {{ .Values.appConfig.keycloak.realm | quote }}
+  LOG_DIR: {{ .Values.appConfig.log.dir | quote }}
+  LOG_FILENAME: {{ .Values.appConfig.log.fileName | quote }}
+  LOG_LEVEL: {{ .Values.appConfig.log.level | quote }}
+  LOG_FORMAT: {{ .Values.appConfig.log.format | quote }}
+  LOG_FILES_COUNT: {{ .Values.appConfig.log.filesCount | quote }}
+  LOG_FILE_SIZE: {{ .Values.appConfig.log.fileSize | quote }}
+  STAGE: {{ .Values.appConfig.stage | quote }}
+  {{- with .Values.globalExtraEnvVarsCM }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  {{- with .Values.main.extraEnvVarsCM }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+...

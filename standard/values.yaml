@@ -1,0 +1,184 @@
+# Image pull policy. Possible values: Always, Never, IfNotPresent.
+pullPolicy: IfNotPresent
+# Image pull secret name.
+pullSecret: ""
+
+# Docker image of the service
+image:
+  registry: 'example-registry-hostname/example-registry-name'
+  name: 'example-service-image-name'
+  tag: 'example-service-image-tag'
+
+# Configuration of application
+appConfig:
+  # Stage name for identification, e.g. "dev" or "test".
+  stage: '<org_name>-<env_name>'
+
+  # Extra files that can be mounted in containers
+  extraFiles: []
+  # - path: '/opt/a/'
+  #   files:
+  #     - name: 'test1'
+  #       content: |-
+  #         example content 1
+  #     - name: 'test2'
+  #       content: |-
+  #         example content 2
+  # - path: '/opt/b'
+  #   readOnly: true
+  #   files:
+  #     - name: 'test3'
+  #       content: |-
+  #         example content 3
+
+# main configuration.
+main:
+  # Override full name of the service
+  nameOverride: ""
+  # Completely replaces the generated name
+  fullnameOverride: ""
+
+  # Lifecycle hooks for the container. Example:
+  # lifecycleHooks: |
+  #   postStart:
+  #     exec:
+  #       command: [ "/bin/sh", "-c", "echo Hello from the postStart handler > /usr/share/message" ]
+  #   preStop:
+  #     exec:
+  #       command: [ "/bin/sh", "-c", "echo Stopping container > /dev/stdout" ]
+  lifecycleHooks: ''
+
+  # Strategy
+  strategy: {}
+
+  # The resources allocated for each replica, both requests and limits.
+  resources:
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+
+  # The minimum number of replicas.
+  replicas: 1
+
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 100
+    targetCPUUtilizationPercentage: 80
+    # targetMemoryUtilizationPercentage: 80
+
+  # Service configuration. Use for cluster migration.
+  service:
+    # Is service enabled?
+    enabled: true
+    type: ClusterIP
+    nameOverride: ""
+    ports:
+      # API configuration.
+      - name: api
+        # Protocol configuration
+        protocol: TCP
+        # Port configuration.
+        ports:
+          # Port inside the container.
+          internal: 8080
+          # External service port.
+          external: 8080
+      # Example API version 2 configuration
+      - name: api2
+        # Protocol configuration
+        protocol: UDP
+        #example new port
+        ports:
+          # Port inside the container.
+          internal: 8081
+          # External service port.
+          external: 81
+
+  # Probes configuration.
+  probes:
+    enabled: true
+    readiness:
+      initialDelaySeconds: 10
+      httpGet:
+        port: 8082
+        path: "/readiness"
+    liveness:
+      initialDelaySeconds: 10
+      httpGet:
+        port: 8082
+        path: "/healthz"
+    startup: {}
+
+  # Ingress configuration.
+  ingress:
+    enabled: false
+    labels: {}
+    annotations: {}
+    className: nginx
+    tls:
+      - hosts:
+          - dev.example.com
+    rules:
+      - host: dev.example.com
+        paths:
+          - path: /api/example
+            pathType: ImplementationSpecific
+            # Can be choose between "name" and "port"
+            port: 8080
+            # name: api
+
+  podDisruptionBudget:
+    enabled: true
+    # An eviction is allowed if at least "minAvailable" pods selected by "selector"
+    # will still be available after the eviction, i.e. even in the absence of the evicted pod.
+    # So for example you can prevent all voluntary evictions by specifying "100%".
+    minAvailable: 1
+    # An eviction is allowed if at most "maxUnavailable" pods selected by "selector"
+    # are unavailable after the eviction, i.e. even in absence of the evicted pod.
+    # For example, one can prevent all voluntary evictions by specifying 0.
+    # This is a mutually exclusive setting with "minAvailable".
+    # maxUnavailable: ""
+
+  #Additional vars
+  extraEnvVarsCM: {}
+  extraEnvVarsSecret: {}
+
+  # NodeSelector configuration of the validators.
+  nodeSelector: {}
+
+  # Deployment affinity configuration. If not set the default one will be used.
+  affinity: {}
+
+  # Never co-located in the same node, can be soft or hard.
+  podAntiAffinityPreset: soft
+
+  # Tolerations of the validators pods.
+  tolerations: []
+
+  # Annotations used in the service resources.
+  annotations: {}
+
+# Annotations used in all application resources.
+annotations: {}
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Global Extra vars
+globalExtraEnvVarsCM: {}
+globalExtraEnvVarsSecret: {}

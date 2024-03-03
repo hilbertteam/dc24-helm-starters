@@ -1,0 +1,56 @@
+{{- if .Values.logging.enabled }}
+{{- range $name, $v := .Values.instances }}
+{{- if $v.enabled }}
+
+{{- $appConfig := dict }}
+{{- if $v.appConfig }}
+{{- $appConfig = mergeOverwrite (deepCopy $.Values.common.appConfig) (deepCopy $v.appConfig) }}
+{{- else }}
+{{- $appConfig = $.Values.common.appConfig }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ include "<CHARTNAME>.fullname" $ }}-{{ $name }}-logging"
+  labels:
+    {{- include "<CHARTNAME>.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+  annotations:
+    {{- include "<CHARTNAME>.common.annotations" $ | nindent 4 }}
+data:
+  {{- if $.Values.logging.vector.enabled }}
+  vector.toml: |-
+  {{- if $.Values.logging.vector.overrideConfig }}
+{{ tpl $.Values.logging.vector.overrideConfig $ | indent 4 }}
+  {{- else }}
+    [sources.input_1]
+    type = "file"
+    data_dir = "{{ $.Values.logging.vector.dataDir }}"
+    include = ["{{ $appConfig.log.dir }}/{{ $appConfig.log.fileName }}"]
+
+    [transforms.parse_logs]
+    type = "remap"
+    inputs = ["input_1"]
+    source = '''
+    . = parse_json!(.message)
+    {{- if $.Values.logging.vector.tag }}
+    .tag = "{{ $.Values.logging.vector.tag }}"
+    {{- end }}
+    {{- if $.Values.logging.vector.application }}
+    .application = "{{ $.Values.logging.vector.application }}"
+    {{- end }}
+    .podname = "${HOSTNAME}"
+    '''
+
+    [sinks.print]
+    inputs = ["parse_logs"]
+    type = "vector"
+    address = "{{ $.Values.logging.vector.aggregator.address }}:{{ $.Values.logging.vector.aggregator.port }}"
+    version = "{{ $.Values.logging.vector.version }}"
+  {{- end }}
+  {{- end }}
+...
+{{- end }}
+{{- end }}
+{{- end }}

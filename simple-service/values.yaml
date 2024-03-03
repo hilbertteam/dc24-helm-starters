@@ -1,0 +1,281 @@
+# Override full name of the service
+nameOverride: ""
+# Completely replaces the generated name
+fullnameOverride: ""
+
+# Image pull policy. Possible values: Always, Never, IfNotPresent.
+pullPolicy: IfNotPresent
+# Image pull secret name.
+pullSecret: ""
+
+# Application image
+image:
+  registry: 'example-registry-hostname/example-registry-name'
+  name: 'example-service-image-name'
+  tag: 'example-service-image-tag'
+
+# Logging configuration
+logging:
+  enabled: true
+
+  # vector sidecar configuration
+  vector:
+    enabled: false
+    image:
+      registry: example-registry-hostname/example-registry-name
+      name: vector
+      tag: 0.25.2-alpine
+    dataDir: /var/lib/vector
+    version: 1
+    aggregator:
+      address: vector.example.com
+      port: 10521
+    resources:
+      requests:
+        cpu: 50m
+        memory: 50Mi
+      limits:
+        cpu: 50m
+        memory: 50Mi
+    tag: default
+    overrideConfig: |
+      [sources.input_1]
+      type = "file"
+      data_dir = "{{ .Values.logging.vector.dataDir }}"
+      include = [ "{{ .Values.appConfig.log.dir}}/{{ .Values.appConfig.log.fileName }}" ]
+    
+      [transforms.parse_logs]
+      type = "remap"
+      inputs = [ "input_1" ]
+      source = '''
+      . = parse_json!(.message)
+      .tag = "{{ .Values.logging.vector.tag }}"
+      '''
+    
+      [sinks.print]
+      inputs = ["parse_logs"]
+      type = "vector"
+      address = "{{ .Values.logging.vector.aggregator.address }}:{{ .Values.logging.vector.aggregator.port }}"
+      version = "{{ .Values.logging.vector.version }}"
+
+# Configuration of application
+appConfig:
+  # Stage name for identification, e.g. "dev" or "test".
+  stage: '<org_name>-<env_name>'
+
+  # Parameters for library
+  log:
+    dir: '/var/log/<CHARTNAME>'
+    fileName: '<CHARTNAME>.log'
+    level: 'INFO'
+    format: 'JSON,CONSOLE'
+    filesCount: '10'
+    fileSize: '100'
+
+  # Insert additional configuration below and link it with configMaps, Secrets, etc as you need.
+  # There is keycloak configuration for example
+  keycloak:
+    url: 'https://example-keycloak-service.domain/auth/'
+    realm: 'example-realm'
+    clientId: 'example-client-id'
+    clientSecretKey: 'example-client-secret-key'
+
+  # Extra files that can be mounted in containers
+  extraFiles: []
+  # - path: '/opt/a/'
+  #   files:
+  #     - name: 'test1'
+  #       content: |-
+  #         example content 1
+  #     - name: 'test2'
+  #       content: |-
+  #         example content 2
+  # - path: '/opt/b'
+  #   readOnly: true
+  #   files:
+  #     - name: 'test3'
+  #       content: |-
+  #         example content 3
+
+# Main configuration. This is a necessary component, it must be present.
+main:
+  # Application name for identification
+  appName: '<CHARTNAME>'
+  # Command that runs the application. Example: '[ "./docker-entrypoint.sh", "<CHARTNAME>" ]'
+  appCommand: ''
+  # Lifecycle hooks for the container. Example:
+  # lifecycleHooks: |
+  #   postStart:
+  #     exec:
+  #       command: [ "/bin/sh", "-c", "echo Hello from the postStart handler > /usr/share/message" ]
+  #   preStop:
+  #     exec:
+  #       command: [ "/bin/sh", "-c", "echo Stopping container > /dev/stdout" ]
+  lifecycleHooks: ''
+
+  # The minimum number of replicas
+  replicas: 1
+  # Strategy
+  strategy: {}
+  # POD Security Context
+  podSecurityContext: {}
+
+  # The resources allocated for each replica, both requests and limits
+  resources:
+    requests:
+      cpu: 200m
+      memory: 500Mi
+    limits:
+      cpu: 200m
+      memory: 500Mi
+
+  # Probes configuration
+  probes:
+    enabled: false
+    readiness: {}
+    #  initialDelaySeconds: 10
+    #  httpGet:
+    #    port: 8082
+    #    path: "/readiness"
+    liveness: {}
+    #  initialDelaySeconds: 10
+    #  httpGet:
+    #    port: 8082
+    #    path: "/healthz"
+    startup: {}
+
+  # Service configuration. Use for cluster migration.
+  service:
+    # Is service enabled?
+    enabled: true
+    type: ClusterIP
+    nameOverride: ""
+    ports:
+      # API configuration.
+      - name: http
+        # Protocol configuration
+        protocol: TCP
+        # Port configuration.
+        ports:
+          # Port inside the container.
+          internal: 80
+          # External service port.
+          external: 80
+
+  # Ingress configuration.
+  ingress:
+    enabled: false
+    labels: {}
+    annotations: {}
+    className: nginx
+    tls:
+      - hosts:
+          - internal.example.com
+          - external.example.com
+    rules:
+      - host: internal.example.com
+        paths:
+          - path: /api/example
+            pathType: ImplementationSpecific
+            # Can be choose between "name" and "port"
+            # port: 80
+            name: http
+      - host: external.example.com
+        paths:
+          - path: /api/example
+            pathType: ImplementationSpecific
+            # Can be choose between "name" and "port"
+            # port: 80
+            name: http
+
+  podDisruptionBudget:
+    enabled: true
+    # An eviction is allowed if at least "minAvailable" pods selected by "selector"
+    # will still be available after the eviction, i.e. even in the absence of the evicted pod.
+    # So for example you can prevent all voluntary evictions by specifying "100%".
+    minAvailable: 1
+    # An eviction is allowed if at most "maxUnavailable" pods selected by "selector"
+    # are unavailable after the eviction, i.e. even in absence of the evicted pod.
+    # For example, one can prevent all voluntary evictions by specifying 0.
+    # This is a mutually exclusive setting with "minAvailable".
+    # maxUnavailable: ""
+
+  # Additional vars
+  extraEnvVarsCM: {}
+
+  # Additional secrets
+  extraEnvVarsSecret: {}
+
+  # NodeSelector configuration of the validators
+  nodeSelector: {}
+
+  # Deployment affinity configuration. If not set the default one will be used.
+  affinity: {}
+
+  # Never co-located in the same node, can be soft or hard
+  podAntiAffinityPreset: 'soft'
+
+  # Tolerations of the validators pods
+  tolerations: []
+
+  # Annotations used in the service resources
+  annotations: {}
+
+# Migrations to prepare an application to work, e.g. a database migration or creating resources in IAM.
+migrations:
+  enabled: false
+
+  # Application name for identification
+  appName: "<CHARTNAME>-migrations"
+  appCommand: ["/opt/<CHARTNAME>/docker-entrypoint.sh", "init"]
+
+  # The resources allocated for each replica, both requests and limits
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  # The number of retries before marking this job failed.
+  backoffLimit: 1
+  # Restart policy for all containers within the pod. One of OnFailure, Never.
+  restartPolicy: Never
+  # The duration in seconds relative to the startTime that the job may be continuously active before the system tries to terminate it.
+  activeDeadlineSeconds: 600
+
+  # Annotations used in the ConfigMap and Secret resources.
+  configAnnotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+
+  # Annotations used in the general Job.
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "1"
+
+  # POD Security Context
+  podSecurityContext: {}
+
+  # Extra variables for ConfigMap or Secret resource.
+  extraEnvVarsCM: {}
+  extraEnvVarsSecret: {}
+
+# Annotations used in all application resources
+annotations: {}
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ''
+
+# Global Extra vars
+globalExtraEnvVarsCM: {}
+
+# Global Extra secrets
+globalExtraEnvVarsSecret: {}

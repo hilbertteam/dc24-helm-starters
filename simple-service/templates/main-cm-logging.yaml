@@ -1,0 +1,39 @@
+{{ if .Values.logging.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ include "<CHARTNAME>.fullname" . }}-logging"
+  labels:
+    {{- include "<CHARTNAME>.main.labels" . | nindent 4 }}
+  annotations:
+    {{- include "<CHARTNAME>.main.annotations" . | nindent 4 }}
+data:
+  {{- if .Values.logging.vector.enabled }}
+  vector.toml: |-
+  {{- if .Values.logging.vector.overrideConfig }}
+{{ tpl .Values.logging.vector.overrideConfig . | indent 4 }}
+  {{- else }}
+    [sources.input_1]
+    type = "file"
+    data_dir = "{{ .Values.logging.vector.dataDir }}"
+    include = [ "{{ .Values.appConfig.log.dir}}/{{ .Values.appConfig.log.fileName }}" ]
+
+    [transforms.parse_logs]
+    type = "remap"
+    inputs = [ "input_1" ]
+    source = '''
+    . = parse_json!(.message)
+    .tag = "{{ .Values.logging.vector.tag }}"
+    .podname = "${HOSTNAME}"
+    '''
+
+    [sinks.print]
+    inputs = ["parse_logs"]
+    type = "vector"
+    address = "{{ .Values.logging.vector.aggregator.address }}:{{ .Values.logging.vector.aggregator.port }}"
+    version = "{{ .Values.logging.vector.version }}"
+  {{- end }}
+  {{- end }}
+...
+{{ end }}

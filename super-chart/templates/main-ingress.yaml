@@ -1,0 +1,70 @@
+{{- range $name, $v := .Values.instances }}
+{{- if $v.enabled }}
+{{- $config := mergeOverwrite (deepCopy $.Values.common) (deepCopy $v) }}
+{{- if $config.ingress.enabled -}}
+---
+{{- $ingressName := print (default (include "<CHARTNAME>.fullname" $ ) $config.service.nameOverride) "-" ( $name ) -}}
+{{- if and $config.ingress.className (not (semverCompare ">=1.18-0" $.Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey $config.ingress.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set $config.ingress.annotations "kubernetes.io/ingress.class" $config.ingress.className}}
+  {{- end }}
+{{- end }}
+{{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
+apiVersion: networking.k8s.io/v1
+{{- else if semverCompare ">=1.14-0" $.Capabilities.KubeVersion.GitVersion }}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  name: {{ $ingressName | quote }}
+  labels:
+    {{- include "<CHARTNAME>.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+    {{- include "quote.object" $config.ingress.labels | indent 4}}
+  annotations:
+    {{- include "<CHARTNAME>.annotations" $ | indent 4 }}
+    {{- include "quote.object" $config.ingress.annotations | indent 4}}
+spec:
+  {{- if and $config.ingress.className (semverCompare ">=1.18-0" $.Capabilities.KubeVersion.GitVersion) }}
+  ingressClassName: {{ $config.ingress.className }}
+  {{- end }}
+  {{- if $config.ingress.tls }}
+  tls:
+    {{- range $config.ingress.tls }}
+    - hosts: {{- include "quote.list" .hosts | indent 6 }}
+      secretName: {{ .secretName | default (include "sanitize" (cat $ingressName "-ssl")) | quote }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range $config.ingress.rules }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            {{- if and .pathType (semverCompare ">=1.18-0" $.Capabilities.KubeVersion.GitVersion) }}
+            pathType: {{ .pathType }}
+            {{- end }}
+            backend:
+              {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
+              service:
+                name: {{ $ingressName | quote }}
+                port:
+                  {{- with .port }}
+                  number: {{ . }}
+                  {{- end }}
+                  {{- with .name }}
+                  name: {{ . }}
+                  {{- end }}
+              {{- else }}
+                serviceName: {{ $ingressName | quote }}
+                servicePort: {{ .port }}
+              {{- end }}
+    {{- end }}
+  {{- end }}
+...
+{{- end }}
+{{- end }}
+{{- end }}
